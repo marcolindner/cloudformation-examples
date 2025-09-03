@@ -19,6 +19,7 @@ Resources:
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
+        
 
   BucketPolicy:
     Type: AWS::S3::BucketPolicy

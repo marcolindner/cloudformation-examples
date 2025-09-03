@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Security Groups für Web- und SSH-Zugriff"
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: "mein-projekt"
+    Description: "Name für alle Ressourcen"
+  
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues: [dev, test, prod]
+    Description: "Umgebung (dev, test, prod)"
+    
+  VPCId:
+    Type: String
+    Description: "ID der VPC (aus dem VPC Template)"
+
+Resources:
+  # Security Group für Web-Server (HTTP/HTTPS von überall)
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectName}-${Environment}-web-sg"
+      GroupDescription: "Security Group für Web-Server - erlaubt HTTP und HTTPS"
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        # HTTP von überall
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: "HTTP von überall"
+        # HTTPS von überall  
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: "HTTPS von überall"
+      SecurityGroupEgress:
+        # Ausgehender Traffic zu überall erlaubt
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: "Ausgehender Traffic zu überall"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-web-sg"
+
+  # Security Group für SSH-Zugriff (nur aus bestimmten IPs)
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectName}-${Environment}-ssh-sg"
+      GroupDescription: "Security Group für SSH-Zugriff - nur aus bestimmten IPs"
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        # SSH nur aus deinem Büro/Home (ACHTUNG: IP anpassen!)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: "SSH Zugriff (ACHTUNG: IP einschränken!)"
+      SecurityGroupEgress:
+        # Ausgehender Traffic zu überall erlaubt
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: "Ausgehender Traffic zu überall"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-ssh-sg"
+
+  # Security Group für Datenbank (nur aus Web-Security Group)
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectName}-${Environment}-db-sg"
+      GroupDescription: "Security Group für Datenbank - nur von Web-Servern erreichbar"
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        # MySQL/MariaDB nur von Web-Security Group
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: "MySQL von Web-Servern"
+        # PostgreSQL nur von Web-Security Group
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: "PostgreSQL von Web-Servern"
+      SecurityGroupEgress:
+        # Kein ausgehender Traffic nötig für Datenbank
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: "HTTP für Updates (falls nötig)"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db-sg"
+
+Outputs:
+  WebServerSecurityGroupId:
+    Description: "ID der Web-Server Security Group"
+    Value: !Ref WebServerSecurityGroup
+    
+  SSHSecurityGroupId:
+    Description: "ID der SSH Security Group"
+    Value: !Ref SSHSecurityGroup
+    
+  DatabaseSecurityGroupId:
+    Description: "ID der Datenbank Security Group"
+    Value: !Ref DatabaseSecurityGroup

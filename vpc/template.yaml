@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Eine vollständige VPC mit öffentlichen und privaten Subnetzen"
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: "mein-projekt"
+    Description: "Name für alle Ressourcen"
+  
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues: [dev, test, prod]
+    Description: "Umgebung (dev, test, prod)"
+
+Resources:
+  # VPC - Das Hauptnetzwerk
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-vpc"
+
+  # Internet Gateway - Verbindung zum Internet
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-igw"
+
+  # Internet Gateway an VPC anhängen
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+  # Öffentliches Subnetz - hat direkten Internet-Zugang
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-public-subnet"
+
+  # Privates Subnetz - kein direkter Internet-Zugang
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-private-subnet"
+
+  # Route Table für öffentliches Subnetz
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-public-rt"
+
+  # Route zum Internet über Internet Gateway
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref myInternetGateway
+
+  # Öffentliches Subnetz mit Route Table verknüpfen
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Route Table für privates Subnetz (erstmal nur lokaler Traffic)
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-private-rt"
+
+  # Privates Subnetz mit Route Table verknüpfen
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+Outputs:
+  VPCId:
+    Description: "ID der VPC"
+    Value: !Ref myVPC
+    
+  PublicSubnetId:
+    Description: "ID des öffentlichen Subnetzes"
+    Value: !Ref PublicSubnet
+    
+  PrivateSubnetId:
+    Description: "ID des privaten Subnetzes"
+    Value: !Ref PrivateSubnet
+    
+  InternetGatewayId:
+    Description: "ID des Internet Gateways"
+    Value: !Ref myInternetGateway
